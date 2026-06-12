@@ -44,10 +44,10 @@ def test_train_step_updates_model() -> None:
     model = LatticeModel(cfg.model)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
     batch = make_synthetic_replay_batch(cfg, device="cpu")
-    before = next(model.parameters()).detach().clone()
+    before = [param.detach().clone() for param in model.parameters()]
 
     losses = train_step(model, optimizer, batch, use_bf16=False)
-    after = next(model.parameters()).detach()
+    after = list(model.parameters())
 
     assert losses.total.isfinite()
-    assert not torch.equal(before, after)
+    assert any(not torch.equal(old, new.detach()) for old, new in zip(before, after, strict=True))

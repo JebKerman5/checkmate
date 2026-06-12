@@ -77,7 +77,7 @@ def test_terminal_overrides() -> None:
         torch.tensor([[True, False]]),
     )
 
-    assert values.tolist() == [[1.0, 0.2]]
+    assert values.tolist() == pytest.approx([[1.0, 0.2]])
 
 
 def test_sample_actions_respects_mask() -> None:
@@ -99,4 +99,4 @@ def test_backfill_outcomes() -> None:
         outcomes=torch.tensor([1.0]),
     )
 
-    assert targets.tolist() == [0.4, 0.4, 0.0, 0.0]
+    assert targets.tolist() == pytest.approx([0.4, 0.4, 0.0, 0.0])

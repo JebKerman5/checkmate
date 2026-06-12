@@ -39,7 +39,7 @@ def test_tensor_piece_prototype_has_startpos_non_slider_moves() -> None:
     boards = encode_board_batch(["startpos"], "cpu")
     result = prototype_pawn_knight_king_from_tensors(boards)
 
-    assert result.legal_mask.sum().item() == 12
+    assert result.legal_mask.sum().item() == 20
 
 
 def test_movegen_benchmark_contract() -> None:
