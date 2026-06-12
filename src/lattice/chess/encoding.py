@@ -28,7 +28,9 @@ PIECE_TO_PLANE = {
 
 
 def encode_board_batch(fens: list[str], device: torch.device | str) -> BoardTensors:
-    boards = allocate_board_tensors(len(fens), device)
+    target = torch.device(device)
+    build_device = "cpu" if target.type == "cuda" else target
+    boards = allocate_board_tensors(len(fens), build_device)
     for batch_index, fen in enumerate(fens):
         board = board_from_fen(fen)
         for square, piece in board.piece_map().items():
@@ -46,4 +48,12 @@ def encode_board_batch(fens: list[str], device: torch.device | str) -> BoardTens
         boards.meta[batch_index] = side_to_move | (castling << 1) | (ep_file << 5) | (halfmove << 9)
 
     boards.occ.copy_(update_occupancy(boards))
+    if target.type == "cuda":
+        return BoardTensors(
+            bb=boards.bb.to(target),
+            occ=boards.occ.to(target),
+            meta=boards.meta.to(target),
+            zhist=boards.zhist.to(target),
+            status=boards.status.to(target),
+        )
     return boards
