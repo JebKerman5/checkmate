@@ -37,6 +37,11 @@ packages = ["src/lattice"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "cuda: requires a CUDA GPU",
+    "ddp: requires torchrun with two CUDA GPUs",
+    "performance: benchmark or throughput-oriented test",
+]
 
 [tool.ruff]
 line-length = 100

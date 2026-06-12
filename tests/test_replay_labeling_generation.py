@@ -44,6 +44,18 @@ def test_replay_write_and_sample() -> None:
     assert sampled.features.shape == batch.features.shape
 
 
+def test_replay_uniform_sample_contract() -> None:
+    cfg = small_config()
+    shard = allocate_replay_shard(cfg, "cpu", capacity=16)
+    batch = make_synthetic_replay_batch(cfg, "cpu", batch_size=4)
+
+    write_batch(shard, batch, torch.ones(4))
+    sampled = sample_batch(shard, batch_size=4, mode="uniform")
+
+    assert sampled.weights.tolist() == pytest.approx([1.0, 1.0, 1.0, 1.0])
+    assert sampled.features.shape == batch.features.shape
+
+
 def test_choose_sparse_expansions_contract() -> None:
     q_scores = torch.tensor([[1.0, 5.0, 3.0, -1.0]])
     legal_mask = torch.tensor([[True, True, True, False]])

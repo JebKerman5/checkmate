@@ -25,6 +25,24 @@ Run the environment check:
 uv run lattice doctor
 ```
 
+## Local-Safe Alpha Checks
+
+These commands are safe for this development PC. They do not start background
+services and the default alpha benchmark does not import torch or touch CUDA.
+
+```powershell
+uv run lattice alpha-bench --profile local --output runs/local-alpha-bench.json
+uv run lattice checkmate-alpha1 --no-require-vm-artifacts --no-require-openspec-complete
+```
+
+The readiness command above is a local contract check only. Full alpha readiness
+requires the VM artifacts listed in `docs/checkmate-alpha1.md`.
+
+## VM-Only GPU Commands
+
+Do not run these on a desktop used for gaming unless you intend to occupy the
+GPUs. Run them on the Thunder Compute VM or another dedicated CUDA machine.
+
 The runtime smoke command validates the dual-GPU topology and exits. It does not
 start a long training job.
 

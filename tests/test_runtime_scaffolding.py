@@ -1,5 +1,15 @@
+from lattice.benchmarking import BenchmarkThreshold, make_section, write_report
 from lattice.chess.tables import AttackTables
-from lattice.profiling import ProfileSummary, acceptance_gaps, summarize_profile
+from lattice.profiling import (
+    PROFILE_EVENT_NAMES,
+    HostSyncCounter,
+    ProfileRecorder,
+    ProfileSummary,
+    acceptance_gaps,
+    acceptance_gaps_from_benchmark,
+    profile_from_benchmark,
+    summarize_profile,
+)
 from lattice.tripwire import TripwireState, evaluate_tripwires
 
 
@@ -35,3 +45,41 @@ def test_profile_acceptance_gaps() -> None:
     assert "GPU SM busy below 90%" in gaps
     assert "CPU usage above one core" in gaps
     assert summarize_profile(summary)["host_syncs"] == 1
+
+
+def test_profile_recorder_and_host_sync_counter() -> None:
+    recorder = ProfileRecorder()
+    syncs = HostSyncCounter()
+
+    with recorder.timed("learner_forward_backward"):
+        syncs.mark("manual-test")
+
+    assert recorder.events[0].name == "learner_forward_backward"
+    assert syncs.count == 1
+    assert syncs.sites["manual-test"] == 1
+    assert "replay_sample" in PROFILE_EVENT_NAMES
+
+
+def test_profile_summary_loads_benchmark_report(tmp_path) -> None:
+    from lattice.benchmarking import BenchmarkReport
+
+    report = BenchmarkReport(
+        profile="test",
+        command="test",
+        environment={},
+        sections=[
+            make_section(
+                "learner",
+                metrics={"steps_per_second": 1.5, "host_syncs": 1},
+                thresholds=[BenchmarkThreshold("host_syncs", "eq", 0)],
+            )
+        ],
+    )
+    path = tmp_path / "bench.json"
+    write_report(report, path)
+
+    summary = profile_from_benchmark(path)
+    gaps = acceptance_gaps_from_benchmark(path)
+
+    assert summary.learner_steps_per_second == 1.5
+    assert "learner: host_syncs 1 != 0" in gaps

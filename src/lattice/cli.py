@@ -4,6 +4,7 @@ import platform
 import sys
 from importlib.util import find_spec
 from pathlib import Path
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -23,6 +24,12 @@ from lattice.runtime import (
 
 app = typer.Typer(no_args_is_help=True)
 console = Console()
+BENCHMARK_REPORT_OPTION = typer.Option("--benchmark-report")
+PROFILE_SUMMARY_OPTION = typer.Option("--profile-summary")
+CHECKPOINT_OPTION = typer.Option("--checkpoint")
+LOSS_CURVE_OPTION = typer.Option("--loss-curve")
+THROUGHPUT_SUMMARY_OPTION = typer.Option("--throughput-summary")
+KNOWN_GAP_OPTION = typer.Option("--known-gap")
 
 
 @app.command()
@@ -158,12 +165,29 @@ def movegen_bench(iterations: int = 10) -> None:
 
 
 @app.command("synthetic-smoke")
-def synthetic_smoke(seconds: float = 1.0, device: str = "cpu") -> None:
+def synthetic_smoke(
+    seconds: float = 1.0,
+    device: str = "cpu",
+    replay_capacity: int = 1024,
+    sample_batch: int = 32,
+    warmup_batches: int = 1,
+    static_batch: bool = False,
+    compile_model: bool = False,
+) -> None:
     """Run a short synthetic learner smoke loop. Use CUDA only when explicitly requested."""
 
     from lattice.trainer import run_synthetic_smoke
 
-    summary = run_synthetic_smoke(LatticeConfig(), device=device, seconds=seconds)
+    summary = run_synthetic_smoke(
+        LatticeConfig(),
+        device=device,
+        seconds=seconds,
+        replay_capacity=replay_capacity,
+        sample_batch_size=sample_batch,
+        warmup_batches=warmup_batches,
+        static_batch=static_batch,
+        use_compile=compile_model,
+    )
     table = Table(title="LATTICE Synthetic Smoke")
     table.add_column("Metric")
     table.add_column("Value")
@@ -176,7 +200,11 @@ def synthetic_smoke(seconds: float = 1.0, device: str = "cpu") -> None:
 
 
 @app.command("ddp-synthetic-smoke")
-def ddp_synthetic_smoke(seconds: float = 10.0) -> None:
+def ddp_synthetic_smoke(
+    seconds: float = 10.0,
+    sample_batch: int | None = None,
+    replay_capacity: int | None = None,
+) -> None:
     """Run a short per-rank synthetic smoke loop under torchrun."""
 
     cfg = LatticeConfig()
@@ -188,6 +216,9 @@ def ddp_synthetic_smoke(seconds: float = 10.0) -> None:
             cfg,
             device=f"cuda:{rank_info.device_index}",
             seconds=seconds,
+            replay_capacity=replay_capacity or cfg.benchmark.replay_capacity,
+            sample_batch_size=sample_batch or cfg.benchmark.sample_batch,
+            warmup_batches=cfg.benchmark.warmup_batches,
         )
         console.print(
             "DDP synthetic smoke "
@@ -202,29 +233,102 @@ def ddp_synthetic_smoke(seconds: float = 10.0) -> None:
         destroy_process_group()
 
 
+@app.command("alpha-bench")
+def alpha_bench(
+    profile: str = "local",
+    output: Path | None = None,
+    preset: str = "local-contract",
+    seconds: float = 0.05,
+    compile_model: bool = False,
+) -> None:
+    """Run alpha benchmark profiles. The default local profile is CPU-safe."""
+
+    from lattice.benchmarking import (
+        run_cuda_microbenchmarks,
+        run_local_safe_benchmark,
+        write_report,
+    )
+
+    normalized = profile.lower().replace("_", "-")
+    if normalized == "local":
+        report = run_local_safe_benchmark(Path.cwd(), seconds=seconds)
+    elif normalized == "cuda":
+        report = run_cuda_microbenchmarks(
+            Path.cwd(),
+            preset=preset,
+            seconds=seconds,
+            include_compile=compile_model,
+        )
+    else:
+        raise typer.BadParameter("profile must be local or cuda")
+
+    _print_benchmark_report(report)
+    if output is not None:
+        write_report(report, output)
+        console.print(f"Wrote benchmark report: {output}")
+
+
+@app.command("ddp-alpha-bench")
+def ddp_alpha_bench(
+    output: Path = Path("runs/checkmate-alpha1/ddp-alpha-bench.json"),
+    seconds: float = 5.0,
+    preset: str = "dual-gpu-ddp-smoke",
+) -> None:
+    """Run the alpha DDP benchmark under torchrun on a dual-GPU VM."""
+
+    from lattice.benchmarking import run_ddp_rank_benchmark, write_report
+    from lattice.config import config_preset
+
+    cfg = config_preset(preset)
+    try:
+        rank_info = initialize_process_group(cfg)
+        report = run_ddp_rank_benchmark(cfg, rank_info, seconds=seconds)
+        if report is not None:
+            write_report(report, output)
+            _print_benchmark_report(report)
+            console.print(f"Wrote DDP benchmark report: {output}")
+    except RuntimeCheckError as exc:
+        console.print(f"DDP alpha benchmark failed: {exc}")
+        raise typer.Exit(1) from exc
+    finally:
+        destroy_process_group()
+
+
 @app.command("profile-summary")
 def profile_summary(
     gpu_sm_busy: float | None = None,
     cpu_cores: float | None = None,
     host_syncs: int | None = None,
     labeled_positions_per_second: float | None = None,
+    report: Path | None = None,
 ) -> None:
     """Summarize profiler metrics and report acceptance gaps."""
 
-    from lattice.profiling import ProfileSummary, acceptance_gaps, summarize_profile
-
-    summary = ProfileSummary(
-        gpu_sm_busy=gpu_sm_busy,
-        cpu_cores=cpu_cores,
-        host_syncs=host_syncs,
-        labeled_positions_per_second=labeled_positions_per_second,
+    from lattice.profiling import (
+        ProfileSummary,
+        acceptance_gaps,
+        acceptance_gaps_from_benchmark,
+        profile_from_benchmark,
+        summarize_profile,
     )
+
+    if report is None:
+        summary = ProfileSummary(
+            gpu_sm_busy=gpu_sm_busy,
+            cpu_cores=cpu_cores,
+            host_syncs=host_syncs,
+            labeled_positions_per_second=labeled_positions_per_second,
+        )
+        gaps = acceptance_gaps(summary)
+    else:
+        summary = profile_from_benchmark(report)
+        gaps = acceptance_gaps_from_benchmark(report)
+
     table = Table(title="LATTICE Profile Summary")
     table.add_column("Metric")
     table.add_column("Value")
     for key, value in summarize_profile(summary).items():
         table.add_row(key, "unset" if value is None else str(value))
-    gaps = acceptance_gaps(summary)
     table.add_row("acceptance gaps", ", ".join(gaps) or "none")
     console.print(table)
 
@@ -237,6 +341,104 @@ def checkpoint_info(path: Path) -> None:
 
     payload = load_checkpoint(path)
     console.print(payload.get("meta", "checkpoint has no meta field"))
+
+
+@app.command("alpha-manifest")
+def alpha_manifest(
+    run_dir: Path = Path("runs/checkmate-alpha1"),
+    run_id: str = "checkmate-alpha1",
+    config_preset: str = "checkmate-alpha1",
+    vm_shape: str = "unset",
+    benchmark_report: Annotated[list[Path] | None, BENCHMARK_REPORT_OPTION] = None,
+    profile_summary_path: Annotated[Path | None, PROFILE_SUMMARY_OPTION] = None,
+    checkpoint: Annotated[list[Path] | None, CHECKPOINT_OPTION] = None,
+    loss_curve: Annotated[list[Path] | None, LOSS_CURVE_OPTION] = None,
+    throughput_summary: Annotated[list[Path] | None, THROUGHPUT_SUMMARY_OPTION] = None,
+    known_gap: Annotated[list[str] | None, KNOWN_GAP_OPTION] = None,
+) -> None:
+    """Write an alpha artifact manifest for a completed smoke or candidate run."""
+
+    from lattice.alpha import AlphaManifest, write_manifest
+    from lattice.benchmarking import collect_environment
+
+    env = collect_environment(config_preset, Path.cwd(), probe_torch=False)
+    manifest = AlphaManifest(
+        run_id=run_id,
+        git_commit=env.get("git_commit"),
+        config_preset=config_preset,
+        vm_shape=vm_shape,
+        benchmark_reports=[
+            _relative_to_run_dir(run_dir, path) for path in benchmark_report or []
+        ],
+        profile_summary=(
+            _relative_to_run_dir(run_dir, profile_summary_path)
+            if profile_summary_path is not None
+            else None
+        ),
+        checkpoints=[_relative_to_run_dir(run_dir, path) for path in checkpoint or []],
+        loss_curves=[_relative_to_run_dir(run_dir, path) for path in loss_curve or []],
+        throughput_summaries=[
+            _relative_to_run_dir(run_dir, path) for path in throughput_summary or []
+        ],
+        known_gaps=list(known_gap or []),
+    )
+    path = write_manifest(run_dir, manifest)
+    console.print(f"Wrote alpha manifest: {path}")
+
+
+@app.command("checkmate-alpha1")
+def checkmate_alpha1(
+    run_dir: Path = Path("runs/checkmate-alpha1"),
+    output: Path | None = None,
+    require_vm_artifacts: bool = True,
+    require_openspec_complete: bool = True,
+) -> None:
+    """Validate whether the repository is ready to tag and run checkmate-alpha1."""
+
+    from lattice.alpha import evaluate_alpha_readiness
+
+    result = evaluate_alpha_readiness(
+        Path.cwd(),
+        run_dir,
+        require_vm_artifacts=require_vm_artifacts,
+        require_openspec_complete=require_openspec_complete,
+    )
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        import json
+
+        output.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
+        console.print(f"Wrote alpha readiness report: {output}")
+
+    table = Table(title="checkmate-alpha1 readiness")
+    table.add_column("Check")
+    table.add_column("Value")
+    table.add_row("ready", str(result["ready"]))
+    gaps = result["gaps"]
+    table.add_row("gaps", "\n".join(gaps) if gaps else "none")
+    console.print(table)
+    if not result["ready"]:
+        raise typer.Exit(1)
+
+
+def _print_benchmark_report(report: Any) -> None:
+    table = Table(title=f"LATTICE Alpha Benchmark ({report.profile})")
+    table.add_column("Section")
+    table.add_column("Status")
+    table.add_column("Key Metrics")
+    table.add_column("Gaps / Skip")
+    for section in report.sections:
+        metrics = ", ".join(f"{key}={value}" for key, value in section.metrics.items())
+        detail = section.skip_reason or ", ".join(section.gaps) or "none"
+        table.add_row(section.name, section.status, metrics[:120], detail[:120])
+    console.print(table)
+
+
+def _relative_to_run_dir(run_dir: Path, path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(run_dir.resolve()))
+    except ValueError:
+        return str(path)
 
 
 if __name__ == "__main__":

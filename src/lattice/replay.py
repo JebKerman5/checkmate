@@ -99,15 +99,29 @@ def sample_batch(
     batch_size: int,
     beta: float = 0.4,
     generator: torch.Generator | None = None,
+    mode: str = "priority",
 ) -> SyntheticReplayBatch:
     if shard.filled <= 0:
         raise ValueError("cannot sample from an empty replay shard.")
 
-    priorities = shard.priorities[: shard.filled].float()
-    probs = priorities / priorities.sum().clamp_min(1e-6)
-    indices = torch.multinomial(probs, batch_size, replacement=True, generator=generator)
-    weights = (shard.filled * probs[indices]).pow(-beta)
-    weights = weights / weights.max().clamp_min(1e-6)
+    normalized = mode.lower().replace("_", "-")
+    if normalized == "uniform":
+        indices = torch.randint(
+            0,
+            shard.filled,
+            (batch_size,),
+            device=shard.features.device,
+            generator=generator,
+        )
+        weights = torch.ones(batch_size, device=shard.features.device)
+    elif normalized == "priority":
+        priorities = shard.priorities[: shard.filled].float()
+        probs = priorities / priorities.sum().clamp_min(1e-6)
+        indices = torch.multinomial(probs, batch_size, replacement=True, generator=generator)
+        weights = (shard.filled * probs[indices]).pow(-beta)
+        weights = weights / weights.max().clamp_min(1e-6)
+    else:
+        raise ValueError("mode must be priority or uniform.")
 
     return SyntheticReplayBatch(
         features=shard.features[indices],
