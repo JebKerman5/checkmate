@@ -77,7 +77,7 @@ def test_terminal_overrides() -> None:
         torch.tensor([[True, False]]),
     )
 
-    assert values.tolist() == pytest.approx([[1.0, 0.2]])
+    assert torch.allclose(values, torch.tensor([[1.0, 0.2]]))
 
 
 def test_sample_actions_respects_mask() -> None:
