@@ -1,0 +1,76 @@
+{
+  "schema_version": "lattice-alpha-bench-v1",
+  "created_at": "2026-06-12T18:33:02.844998+00:00",
+  "profile": "ddp",
+  "command": "torchrun --nproc_per_node=2 -m lattice.cli ddp-alpha-bench",
+  "environment": {
+    "preset": "dual-gpu-ddp-smoke",
+    "git_commit": "2be62e4",
+    "git_dirty": false,
+    "python": "3.12.13",
+    "platform": "Linux-6.8.0-110-generic-x86_64-with-glibc2.35",
+    "torch_available": true,
+    "torch_probed": true,
+    "torch_version": "2.11.0+cu130",
+    "cuda_available": true,
+    "cuda_device_count": 2,
+    "cuda_devices": [
+      "NVIDIA A100-SXM4-80GB",
+      "NVIDIA A100-SXM4-80GB"
+    ],
+    "bf16_supported": true,
+    "world_size_env": "2"
+  },
+  "sections": [
+    {
+      "name": "ddp_aggregate",
+      "status": "pass",
+      "metrics": {
+        "world_size": 2,
+        "global_batch": 256,
+        "min_rank_steps_per_second": 11.918643270997457,
+        "max_rank_steps_per_second": 14.866564338234824,
+        "rank_skew_steps_per_second": 2.947921067237367,
+        "mean_all_reduce_share": 0.008124401575831528,
+        "max_checksum_delta": 0.0,
+        "weights_synced": true,
+        "host_syncs": 0
+      },
+      "thresholds": [
+        {
+          "metric": "world_size",
+          "op": "eq",
+          "value": 2,
+          "description": ""
+        },
+        {
+          "metric": "weights_synced",
+          "op": "eq",
+          "value": true,
+          "description": ""
+        },
+        {
+          "metric": "host_syncs",
+          "op": "eq",
+          "value": 0,
+          "description": ""
+        }
+      ],
+      "gaps": [],
+      "skip_reason": null,
+      "elapsed_seconds": null
+    },
+    {
+      "name": "ddp_rank_metrics",
+      "status": "pass",
+      "metrics": {
+        "ranks": "[{\"all_reduce_seconds\": 0.0005328897386789322, \"all_reduce_share\": 0.007922239585255487, \"checksum\": 577.5298276990652, \"learner_step_seconds\": 0.06726503698155284, \"learner_steps_per_second\": 14.866564338234824, \"rank\": 0}, {\"all_reduce_seconds\": 0.0006986167281866074, \"all_reduce_share\": 0.008326563566407567, \"checksum\": 577.5298276990652, \"learner_step_seconds\": 0.08390216715633869, \"learner_steps_per_second\": 11.918643270997457, \"rank\": 1}]"
+      },
+      "thresholds": [],
+      "gaps": [],
+      "skip_reason": null,
+      "elapsed_seconds": null
+    }
+  ],
+  "gaps": []
+}

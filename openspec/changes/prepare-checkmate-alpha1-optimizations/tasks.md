@@ -31,15 +31,15 @@
 - [x] 4.2 Add host synchronization counters for the integrated loop and benchmark sections.
 - [x] 4.3 Extend `profile-summary` to load benchmark JSON and report alpha acceptance gaps directly.
 - [x] 4.4 Add tests for host-sync gap reporting and profile summary JSON parsing.
-- [ ] 4.5 Run the available benchmark suite on a low-cost CUDA VM and record the top bottleneck in an alpha profile artifact.
+- [x] 4.5 Run the available benchmark suite on a low-cost CUDA VM and record the top bottleneck in an alpha profile artifact.
 
 ## 5. Hot-Path Optimization
 
-- [ ] 5.1 Select the first chess or replay hot path from profiler evidence and document the before metric.
+- [x] 5.1 Select the first chess or replay hot path from profiler evidence and document the before metric.
 - [x] 5.2 Implement the optimized path behind a feature/config flag while keeping the reference path for tests.
 - [x] 5.3 Remove Python per-record or per-square loops from the selected alpha hot path.
 - [x] 5.4 Add differential correctness tests against `python-chess` or existing reference fixtures for the optimized path.
-- [ ] 5.5 Add benchmark comparisons for reference versus optimized path and record the after metric.
+- [x] 5.5 Add benchmark comparisons for reference versus optimized path and record the after metric.
 - [x] 5.6 Make alpha VM profiles fail readiness if they fall back to CPU reference movegen for training.
 
 ## 6. Learner And Replay Optimization
@@ -47,7 +47,7 @@
 - [x] 6.1 Add config presets for local contract, single-GPU smoke, dual-GPU DDP smoke, and `checkmate-alpha1`.
 - [x] 6.2 Make synthetic smoke use configurable replay capacity, sample batch, warmup count, and benchmark duration.
 - [x] 6.3 Add static batch/buffer reuse in learner smoke paths to reduce avoidable allocations.
-- [ ] 6.4 Benchmark BF16 eager versus compiled learner modes on CUDA and record throughput deltas.
+- [x] 6.4 Benchmark BF16 eager versus compiled learner modes on CUDA and record throughput deltas.
 - [x] 6.5 Add replay allocation/throughput diagnostics that flag priority sampling if it dominates learner step time.
 - [x] 6.6 Verify DDP learner benchmark keeps rank weights synchronized after benchmark steps.
 
@@ -63,7 +63,7 @@
 
 - [x] 8.1 Run local `uv run pytest` and `uv run ruff check src tests` without GPU extras.
 - [x] 8.2 Run local-safe `alpha-bench` and confirm no CUDA workload or background process is started.
-- [ ] 8.3 Run single-GPU CUDA benchmarks on a low-cost VM and save the JSON report.
-- [ ] 8.4 Run two-rank DDP benchmark on a dual-GPU VM and save the JSON report.
+- [x] 8.3 Run single-GPU CUDA benchmarks on a low-cost VM and save the JSON report.
+- [x] 8.4 Run two-rank DDP benchmark on a dual-GPU VM and save the JSON report.
 - [ ] 8.5 Run the ten-minute integrated DDP smoke and save throughput, loss, profile, and manifest artifacts.
 - [ ] 8.6 Run the one-hour alpha candidate only after readiness gaps from the ten-minute smoke are resolved.
