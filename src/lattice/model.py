@@ -100,8 +100,9 @@ class AxisMix(nn.Module):
         mixed = torch.einsum("blic,ij->bljc", lines, weight)
         mixed = mixed * mask.view(1, 15, 8, 1).to(dtype=mixed.dtype)
 
-        out = x.new_zeros(batch, 65, channels)
-        out.index_add_(1, flat_indices, mixed.reshape(batch, -1, channels))
+        source = mixed.reshape(batch, -1, channels)
+        out = source.new_zeros(batch, 65, channels)
+        out.index_add_(1, flat_indices, source)
         return out[:, :64]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
